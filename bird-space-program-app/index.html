@@ -127,10 +127,11 @@ button{font-family:inherit;color:inherit}
 #stgStack .sr .f{flex:1;height:6px;background:rgba(255,255,255,.15);border-radius:2px;overflow:hidden}
 #stgStack .sr .f i{display:block;height:100%;background:#6fd36f}
 .cbtn{appearance:none;cursor:pointer;pointer-events:auto;background:var(--glass);border:1px solid var(--line);border-radius:12px;font:700 12px/1 var(--mono);min-height:44px;touch-action:none}
-.steer{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:128px}
-.steer .cbtn{min-height:56px;font-size:20px}
-.steer .rot{grid-column:1/3;min-height:44px;font-size:14px;font-weight:700;letter-spacing:.06em}
-.steer .stage{grid-column:1/3;min-height:60px;background:var(--ember);border-color:var(--ember);color:#fff;font:800 17px/1 var(--display);letter-spacing:.04em}
+.steer{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;width:162px}
+.steer .cbtn{min-height:52px;font-size:19px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--paper)}
+.steer .cbtn small{font:700 9px/1 var(--mono);opacity:.6}
+#bU{grid-column:2;grid-row:1}#bL{grid-column:1;grid-row:2}#bD{grid-column:2;grid-row:2}#bR{grid-column:3;grid-row:2}
+.steer .stage{grid-column:1/4;grid-row:3;min-height:60px;background:var(--ember);border-color:var(--ember);color:#fff;font:800 17px/1 var(--display);letter-spacing:.04em}
 .cbtn:active{background:rgba(255,255,255,.2)}
 
 /* Screens */
@@ -615,11 +616,10 @@ body.quiet #quietBtn{display:block}
       <div class="navwrap"><div id="dvbox"><span>ΔV m/s <b id="dvS">-</b></span><span>TWR <b id="dvT">-</b></span><span>BURN <b id="dvB">-</b></span><span>TOT <b id="dvA">-</b></span></div><canvas id="nav" width="264" height="264"></canvas><button class="cbtn" id="bSas">SAS HOLD</button></div>
     </div>
     <div class="steer">
-      <button class="cbtn" id="bL" aria-label="Tilt west">&#9664;</button>
-      <button class="cbtn" id="bR" aria-label="Tilt east">&#9654;</button>
-      <button class="cbtn" id="bTL" aria-label="Turn left" hidden>&#8634; &#9664;</button>
-      <button class="cbtn" id="bTR" aria-label="Turn right" hidden>&#9654; &#8635;</button>
-      <button class="cbtn rot" id="bRot">ROTATE</button>
+      <button class="cbtn" id="bU" aria-label="Point up">&#9650;<small>W</small></button>
+      <button class="cbtn" id="bL" aria-label="Point left">&#9664;<small>A</small></button>
+      <button class="cbtn" id="bD" aria-label="Point down">&#9660;<small>S</small></button>
+      <button class="cbtn" id="bR" aria-label="Point right">&#9654;<small>D</small></button>
       <button class="cbtn stage" id="bStage">STAGE</button>
     </div>
   </div>
@@ -639,7 +639,7 @@ body.quiet #quietBtn{display:block}
     <div class="pc"><button class="pb" id="pmVid">Video Tutorials</button></div>
     <div class="pc"><button class="pb" id="pmExit">Exit To Space Center</button></div>
     <div class="pc"><button class="pb close" id="bResume">Close</button></div>
-    <p class="pk" id="pauseTxt">Keys: I / K RCS push, Space stage, Shift / Ctrl throttle, Z full, X cut, A D tilt, T SAS, P chute, B airbrake, V first person, M map, comma / period time warp.</p>
+    <p class="pk" id="pauseTxt">Keys: I / K RCS push, Space stage, Shift / Ctrl throttle, Z full, X cut, W A S D point up / left / down / right, T SAS, P chute, B airbrake, V first person, M map, comma / period time warp.</p>
   </div>
   <div class="ppan" id="ppan" hidden><div class="ppbox" id="ppbox"></div></div>
 </section>
@@ -977,17 +977,18 @@ function stepFlight(F,h,inp){
   const mass=flightMass(F);F.mass=mass;
   let rate=clamp((14+(F.tq||0))/mass,.25,.9)*F.pil.turn;
   if(F.fins)rate*=1+.35*Math.min(F.fins,2)*clamp(Math.sqrt(F.q||0)/60,0,1);
-  if(F.rcsF>0&&inp.pitch&&!F.plane&&(F.dn||0)<.05){rate=Math.max(rate,.6*F.pil.turn);F.rcsF=Math.max(0,F.rcsF-.25*h);}
+  if(F.rcsF>0&&(inp.pitch||inp.dirA!=null)&&!F.plane&&(F.dn||0)<.05){rate=Math.max(rate,.6*F.pil.turn);F.rcsF=Math.max(0,F.rcsF-.25*h);}
   if(F.plane){const au=clamp(Math.sqrt(F.q||0)/30,0,1);rate*=Math.max(au,.55*(1-clamp((F.dn||0)/.02,0,1)));}
   if(!F.plane&&REAL.on&&F.ecDead&&!F.burning&&!(F.rcsF>0))rate*=.3;
-  if(F.gloc&&inp.pitch)inp={pitch:0,rcs:0};
+  if(F.gloc&&(inp.pitch||inp.dirA!=null))inp={pitch:0,rcs:0,dirA:null};
   F.wheelUse=(!F.plane&&F.tq>0&&Math.abs(F.omega)>.01)?.4*F.tq/30:0;
   /* attitude */
   if(!F.launched&&F.sitting){F.omega=0;}
   else if(F.sitting&&F.landed&&F.legs&&F.legDep>.95){F.alpha+=angd(F.sitB?Math.atan2(F.sitU[1],F.sitU[0]):Math.atan2(F.Y,F.X),F.alpha)*clamp(2.5*h,0,1);F.omega=0;}
   else{
     let wT;
-    if(inp.pitch){wT=-inp.pitch*rate;F.hold=F.alpha;}
+    if(inp.dirA!=null){wT=clamp(2.6*angd(inp.dirA,F.alpha),-rate,rate);F.hold=F.alpha;}
+    else if(inp.pitch){wT=-inp.pitch*rate;F.hold=F.alpha;}
     else if(F.sas==='off'||(REAL.on&&F.ecDead)){wT=F.omega;}
     else{
       let tgt=F.hold;const sp0=Math.hypot(F.vx,F.vy);
@@ -2875,7 +2876,7 @@ function warpCap(){
   return near<15000?50:(near<150000?1000:(near<1.5e6?10000:100000));
 }
 let mapOn=false,paused=false,landTimer=0,hintDone={},earned=[],T=0;
-const inp={pitch:0,l:false,r:false,rcs:0};let rcsHold=0;
+const inp={pitch:0,l:false,r:false,u:false,d:false,rcs:0,dirA:null};let rcsHold=0;
 const keys={};
 let view={rm:R+4,theta:0,alpha:Math.PI/2};
 let camYaw=0,camPitch=.03,camDist=18,camDistT=18,drag=0;
@@ -2937,7 +2938,7 @@ function evaStep(dt){
   if(EVA.F!==F||!F||mode!=='fly'||F.crashed){evaClear();return;}
   const gb=F.body&&F.body!=='home'?BODIES[F.body]:null,low=!!gb;
   const ir=(inp.r||keys.ArrowRight||keys.KeyD?1:0)-(inp.l||keys.ArrowLeft||keys.KeyA?1:0);
-  const iu=(evk.u||keys.ArrowUp||keys.KeyW)?1:0,id=(evk.d||keys.ArrowDown||keys.KeyS)?1:0;
+  const iu=(evk.u||inp.u||keys.ArrowUp||keys.KeyW)?1:0,id=(evk.d||inp.d||keys.ArrowDown||keys.KeyS)?1:0;
   if(ir)EVA.face=ir;
   const n=Math.max(1,Math.ceil(dt/.02)),h=dt/n;let jet=0;
   for(let i=0;i<n;i++){
@@ -4011,7 +4012,7 @@ function startFlight(cargo,pid){
   $('vab').hidden=true;$('fl').hidden=false;$('res').hidden=true;$('pause').hidden=true;
   camDistT=F.plane?36:Math.max(22,F.H*2.6);camDist=camDistT;if(F.plane){camYaw=.5;camPitch=.16;}
   $('flCeo').classList.remove('on');$('sciPanel').hidden=true;
-  say(F.plane?'Runway is clear. Throttle up with Z, and at about 65 m/s pull the nose up with the ▲ button (Up arrow). The ◄ ► buttons turn the plane around.':'Pad is clear. Press STAGE to light the engine, then climb straight up.',true,true);
+  say(F.plane?'Runway is clear. Throttle up with Z, and at about 65 m/s pull the nose up with the ▲ button (Up arrow). The \u25C0 \u25B6 buttons (A / D) turn the plane around.':'Pad is clear. Press STAGE to light the engine, then climb straight up.',true,true);
   tone(440,.1,'triangle',.06,880);
 }
 function doStage(){
@@ -4065,7 +4066,7 @@ function doTurn(dir){
   const r=planeTurn(F,dir);
   if(r==='ok'){toast(dir<0?'Turned left':'Turned right');tone(320,.12,'triangle',.05,520);}
   else if(r==='fast')toast('Slow down to turn on the ground');
-  else if(r==='space')toast('Turning is for flying in air. Use Rotate in space');
+  else if(r==='space')toast('In space, point it with W A S D');
   else if(r==='same')toast('Already facing '+(dir<0?'left':'right'));
 }
 function stnN(r){return Math.sqrt(MU/(r*r*r));}
@@ -4126,9 +4127,8 @@ function buildStnObj(){
 }
 function setFlControls(){
   const pl=!!(F&&F.plane);
-  $('bL').innerHTML=pl?'&#9650;':'&#9664;';$('bR').innerHTML=pl?'&#9660;':'&#9654;';
-  $('bL').setAttribute('aria-label',pl?'Nose up':'Tilt west');$('bR').setAttribute('aria-label',pl?'Nose down':'Tilt east');
-  $('bTL').hidden=!pl;$('bTR').hidden=!pl;
+  $('bU').setAttribute('aria-label',pl?'Nose up':'Point up');$('bD').setAttribute('aria-label',pl?'Nose down':'Point down');
+  $('bL').setAttribute('aria-label',pl?'Turn left':'Point left');$('bR').setAttribute('aria-label',pl?'Turn right':'Point right');
 }
 function doChute(){
   if(!F||mode!=='fly')return;
@@ -4252,7 +4252,7 @@ $('pmVid').addEventListener('click',function(){
   ppOpen('Video Tutorials',[],[
     'No videos yet, but here is the quick flight guide.',
     '1. Press STAGE to light the engine. Hold Shift or Ctrl to change throttle.',
-    '2. Tilt with the arrow buttons. Climb straight up first, then lean east and keep burning until the Ap passes 40 km.',
+    '2. Steer with W A S D (or the arrow pad): W points up, D points right (east), S down, A left. Climb straight up first, then tap D to lean east and keep burning until the Ap passes 40 km.',
     '3. Cut the engine at the Ap, then burn again there to lift your Pe above the air. That is an orbit.',
     '4. Turn SAS to RETRO and burn to come down. The shield, a Molt Ring and the chute do the rest.',
     '5. Open the Storage Box in orbit to deploy satellites. The Tracking Station studies new worlds over time.'
@@ -4283,7 +4283,7 @@ $('bEva').addEventListener('click',evaStart);$('evSamp').addEventListener('click
 $('bView').addEventListener('click',function(){if(mode!=='fly')return;if(fpv&&e_dbl()){}setFpv(!fpv);});
 function e_dbl(){return false;}
 $('bSas').addEventListener('click',cycleSas);
-$('bRot').addEventListener('click',doRotate);$('bTL').addEventListener('click',function(){doTurn(-1);});$('bTR').addEventListener('click',function(){doTurn(1);});$('bNav').addEventListener('click',cycleTarget);
+$('bL').addEventListener('pointerdown',function(){if(F&&F.plane&&F.alt<ATM*.8&&!EVA)doTurn(-1);});$('bR').addEventListener('pointerdown',function(){if(F&&F.plane&&F.alt<ATM*.8&&!EVA)doTurn(1);});$('bNav').addEventListener('click',cycleTarget);
 $('bMap').addEventListener('click',toggleMap);
 $('wUp').addEventListener('click',function(){changeWarp(1);});
 $('wDn').addEventListener('click',function(){changeWarp(-1);});
@@ -4294,7 +4294,7 @@ function hold(el,key){
   const off=function(){inp[key]=false;};
   el.addEventListener('pointerdown',on);el.addEventListener('pointerup',off);el.addEventListener('pointercancel',off);el.addEventListener('lostpointercapture',off);
 }
-hold($('bL'),'l');hold($('bR'),'r');
+hold($('bL'),'l');hold($('bR'),'r');hold($('bU'),'u');hold($('bD'),'d');
 (function(){
   const t=$('thr');let on=false;
   const set=function(e){const r=t.getBoundingClientRect();setThrottle(1-(e.clientY-r.top)/r.height);};
@@ -4309,9 +4309,8 @@ window.addEventListener('keydown',function(e){
   if(e.code==='Space'){e.preventDefault();if(!e.repeat)doStage();}
   else if(e.code==='KeyT')cycleSas();
   else if(e.code==='KeyP')doChute();
-  else if(e.code==='KeyR'){if(!e.repeat)doRotate();}
-  else if(F&&F.plane&&(e.code==='ArrowLeft'||e.code==='KeyA')){if(!e.repeat)doTurn(-1);}
-  else if(F&&F.plane&&(e.code==='ArrowRight'||e.code==='KeyD')){if(!e.repeat)doTurn(1);}
+  else if(F&&F.plane&&F.alt<ATM*.8&&!EVA&&(e.code==='ArrowLeft'||e.code==='KeyA')){if(!e.repeat)doTurn(-1);}
+  else if(F&&F.plane&&F.alt<ATM*.8&&!EVA&&(e.code==='ArrowRight'||e.code==='KeyD')){if(!e.repeat)doTurn(1);}
   else if(e.code==='KeyB')doBrake();
   else if(e.code==='KeyG')doLegs();
   else if(e.code==='KeyV')setFpv(!fpv);
@@ -5129,10 +5128,13 @@ function frameUpdate(dt){
   /* sim */
   let th=view.theta;
   if(mode==='fly'&&F&&!paused){
-    if(F.plane){const up=inp.l||keys.ArrowUp||keys.KeyW,dn=inp.r||keys.ArrowDown||keys.KeyS;inp.pitch=((dn?1:0)-(up?1:0))*F.flip;}
-    else inp.pitch=((inp.r||keys.ArrowRight||keys.KeyD)?1:0)-((inp.l||keys.ArrowLeft||keys.KeyA)?1:0);
+    {const kU=inp.u||keys.ArrowUp||keys.KeyW,kD=inp.d||keys.ArrowDown||keys.KeyS,kL=inp.l||keys.ArrowLeft||keys.KeyA,kR=inp.r||keys.ArrowRight||keys.KeyD;inp.dirA=null;
+      if(F.plane&&F.alt<ATM*.8){inp.pitch=((kD?1:0)-(kU?1:0))*F.flip;}
+      else{inp.pitch=0;const kx=(kR?1:0)-(kL?1:0),ky=(kU?1:0)-(kD?1:0);
+        /* point the nose toward the pressed direction on screen: W up, S down, A left, D right (diagonals with two keys) */
+        if(kx||ky){const upA=Math.PI/2-view.theta,sg=Math.cos(camYaw)>=0?1:-1;inp.dirA=upA-Math.PI/2+Math.atan2(ky,kx*sg);}}}
     inp.rcs=rcsHold||((keys.KeyI?1:0)-(keys.KeyK?1:0));
-    if(EVA){inp.pitch=0;warp=1;}
+    if(EVA){inp.pitch=0;inp.dirA=null;warp=1;}
     if(F.target&&!F.crashed){const tp=tgtPos(F.target);F.tgtAng=Math.atan2(tp[1]-F.Y,tp[0]-F.X);}else{F.tgtAng=null;if(F.sas==='tgt')F.sas='hold';}
     if(keys.ShiftLeft||keys.ShiftRight)setThrottle(F.throttle+dt*.5);
     if(keys.ControlLeft||keys.ControlRight)setThrottle(F.throttle-dt*.5);
@@ -5219,7 +5221,7 @@ function frameUpdate(dt){
         if(!F.rolling&&F.alt<200&&F.vspd<-1&&F.launched&&!hintDone.ldg){hintDone.ldg=1;say('Landing: ease off the throttle, nose a little up, touch down gently, then hold B to brake.',true);}
         if(F.plane.rf&&F.pmode==='jet'&&F.alt>14000&&!hintDone.air){hintDone.air=1;say('The jet is starving for air. Press the ROCKET button to keep climbing.',true);}
       }
-      if(!F.plane&&!hintDone.turn&&F.body==='home'&&F.alt<20000&&F.alt>1500&&Math.abs(angd(F.alpha,Math.PI/2))<.12){hintDone.turn=1;say('Time to turn. Tap the right arrow to tilt east, then switch SAS to PROGRADE.',true);}
+      if(!F.plane&&!hintDone.turn&&F.body==='home'&&F.alt<20000&&F.alt>1500&&Math.abs(angd(F.alpha,Math.PI/2))<.12){hintDone.turn=1;say('Time to turn. Tap D (the \u25B6 button) briefly to lean east, then switch SAS to PROGRADE.',true);}
       if(!F.plane&&!hintDone.thr&&F.fired&&F.throttle<.05&&F.alt<5){hintDone.thr=1;say('Raise the throttle on the left, or press Z.',true);}
       if(!F.plane&&!hintDone.dry&&F.body==='home'&&F.alt>ATM+5000&&F.orb.eps<0&&F.orb.pe<0&&!F.burning&&F.vspd<0){hintDone.dry=1;say('Falling back. Deploy the drogue chute below 2 km. The main opens by itself at 200 m.',true);}
       if(!F.plane&&F.reachedOrbit&&F.body==='home'&&SAVE.found.moon&&!hintDone.moonTip&&!F.burning&&F.alt>ATM+20000){hintDone.moonTip=1;setTimeout(function(){if(F&&mode==='fly')say('Want the Moon? Open the Map, tap Node @ Pe, add prograde until it says MOON ENCOUNTER, then burn on MANEUVER SAS. Time warp goes up to 100,000x out there.',true,true);},6000);}
@@ -5674,7 +5676,7 @@ function menuPanel(kind){
       readIdx().forEach(function(x){lsDel(SLOTP+x.id);});writeIdx([]);armed=false;e.textContent='All saves deleted';
     });
     b.appendChild(e);
-    const p=document.createElement('p');p.textContent='Keys in flight: Space stage, Shift / Ctrl throttle, A D tilt, T SAS, P chute, B airbrake, V first person, M map.';b.appendChild(p);
+    const p=document.createElement('p');p.textContent='Keys in flight: Space stage, Shift / Ctrl throttle, W A S D point the rocket, T SAS, P chute, B airbrake, V first person, M map.';b.appendChild(p);
   }else{
     h.textContent='Credits';
     [['Abbas','CEO and pilot. Lovebird. In charge of everything, including the AliExpress orders.'],['Salman','Flight Director. African grey. Watches every launch from the cage.'],['Snowflake','Head Scientist. White cockatiel. Runs the Science Lab in a very clean coat.'],['Lightning','Test Pilot. Cockatiel. Fears nothing, mostly the floor.'],['Built with','Claude, three.js and a lot of birdseed.']].forEach(function(c){const p=document.createElement('p');p.innerHTML='<strong style="color:#ffd23d"></strong> ';p.firstChild.textContent=c[0];p.appendChild(document.createTextNode(c[1]));b.appendChild(p);});
