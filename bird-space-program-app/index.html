@@ -709,7 +709,7 @@ function progV(F){
 }
 /* engines: real engines can only relight a few times and cannot throttle all the way down */
 const IGN={spar:3,kes:4,alb:2,condor:2,swift:4,owl:8,wren:10,nerv:12,ion:999};
-const MINT={spar:.4,kes:.35,alb:.5,condor:.6,swift:.3,owl:.1,wren:.1,nerv:.3,ion:0};
+const MINT={};/* no minimum throttle: every engine throttles all the way down */
 /* radio: the Moon (or another moon) between you and home blocks the signal, and so does reentry plasma */
 function sigOK(F){
   if((F.plasma||0)>PLASMA_CDA*.3&&F.vspd<0){F.sigWhy='plasma';return false;}
@@ -1043,7 +1043,7 @@ function stepFlight(F,h,inp){
       else if(e.lit){
         e.pmsg=0;
         e.spool=Math.min(1,(e.spool||0)+h/(rl?(d.id==='ion'?2:1.1):.01));
-        const tf=Math.max(F.throttle,rl?(MINT[d.id]||0):0)*e.spool;F.minT=rl?(MINT[d.id]||0):0;
+        const tf=F.throttle*e.spool;F.minT=0;
         const mdot=tf*d.f*1000/(d.vac*G0*F.pil.isp),want=mdot*h/1000,burn=Math.min(fuel,want);
         const isp=d.vac+(d.sl-d.vac)*pr;
         thrN=want>0?mdot*isp*F.pil.isp*G0*(burn/want):0;
@@ -3104,7 +3104,7 @@ function sxUpdate(dt){
   const fly=!!(F&&mode==='fly'&&!paused&&!F.crashed),slow=fly&&warp<=3;
   const home=fly&&F.body==='home',pr=home&&F.alt<ATM*1.4?Math.exp(-Math.max(F.alt,0)/HS):0,air=.3+.7*Math.sqrt(pr);
   let eng=0,ion=0,srb=0;
-  if(slow&&F.coreBurn&&!F.ionB){const e=F.plane&&F.pmode==='jet'?{f:60}:segEngine(F.segs[F.segs.length-1]);eng=Math.max(F.throttle,F.minT||0)*clamp(((e&&e.def?e.def.f:(e?e.f:120)))/220,.35,2.2);}
+  if(slow&&F.coreBurn&&!F.ionB){const e=F.plane&&F.pmode==='jet'?{f:60}:segEngine(F.segs[F.segs.length-1]);eng=F.throttle*clamp(((e&&e.def?e.def.f:(e?e.f:120)))/220,.35,2.2);}
   if(slow&&F.ionB)ion=F.throttle;
   if(slow)(F.boost||[]).forEach(function(b){if(b.on)srb+=b.n*b.def.f/260;});
   const E=Math.min(1.6,eng+srb*.8);
@@ -3669,7 +3669,7 @@ function showLabPart(){
 function labInfo(d){
   const un=isUn(d);let s=d.name+'. ';
   if(d.kind==='tank')s+=fmt(d.fuel,1)+' t fuel, dry mass '+d.mass+' t.';
-  else if(d.kind==='engine')s+=d.f+' kN, Isp '+d.sl+' s at sea level, '+d.vac+' s in vacuum.'+(IGN[d.id]?(IGN[d.id]<99?' Can light '+IGN[d.id]+' times per flight.':' Lights as often as you like, if it has power.')+' Lowest throttle '+Math.round((MINT[d.id]||0)*100)+'%.':'')+(d.id==='ion'?' Uses 8 charge per second at full power.':'');
+  else if(d.kind==='engine')s+=d.f+' kN, Isp '+d.sl+' s at sea level, '+d.vac+' s in vacuum.'+(IGN[d.id]?(IGN[d.id]<99?' Can light '+IGN[d.id]+' times per flight.':' Lights as often as you like, if it has power.'):'')+(d.id==='ion'?' Uses 8 charge per second at full power.':'');
   else if(d.kind==='brake')s+='Ordered from AliExpress. Original NASA, they said. $100. Flaps open for a lot of drag. Tears off above heavy air pressure.';
   else if(d.kind==='legs')s+='Four folding landing legs with shock absorbers, like a real reusable booster. They stay folded against the hull for launch. Tap Legs (or press G) to swing them down before touchdown. Deployed legs land softly up to 16 m/s, snap off between 16 and 24 m/s, and the rocket is lost above that. Without legs a tall rocket tips over unless it lands almost straight. Deploying them in fast air (over about 26 kPa) tears them off, and they add drag. Fit them just above the engine of the stage that lands.';
   else if(d.kind==='shield')s+='Ablative heat shield. Burns away to protect the pod on reentry. Stage off everything below it and fall retrograde.';
@@ -5379,7 +5379,7 @@ function frameUpdate(dt){
   if(F&&mode==='fly'){
     $('thrFill').style.height=(F.throttle*100)+'%';
     if(++hudTick%6===0){
-      $('thrTxt').textContent=(REAL.on&&F.minT&&F.throttle>0&&F.throttle<F.minT?'min ':'')+Math.round(Math.max(F.throttle,F.throttle>0&&REAL.on?(F.minT||0):0)*100)+'%';
+      $('thrTxt').textContent=Math.round(F.throttle*100)+'%';
       $('met').textContent=clock(F.t);
       $('rAlt').textContent=dist(F.balt)+(F.body!=='home'?' '+(F.body==='moon'?'Moon':BODIES[F.body].name):'');
       $('rVs').textContent=fmt(F.bvspd)+' m/s';
